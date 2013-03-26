@@ -1,0 +1,116 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Mobvcasting Location Based Streaming</title>
+    <style type="text/css">
+      html, body, #basicMap {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+      }
+    </style>
+    <script src="jquery-1.9.1.min.js"></script>    
+    <script src="OpenLayers.js"></script>
+    <script>
+	    /* Change these variables */
+    	var streamersFeedUrl = PUT YOUR NODE SERVER HERE
+    	var initialLat = 40.7300457;
+    	var initialLon = -73.9939577;
+    	var initialZoom = 12;
+    
+    	var markers = null;
+    	var latLonProjection = null;
+    	    	
+    	function MyMarker(uuid, lat, lon)
+    	{
+    		this.uuid = uuid;
+    		this.lat = lat;
+    		this.lon = lon;
+    	}
+    
+		function init() {
+			var options = {
+			  controls: [
+				new OpenLayers.Control.Navigation(),
+				new OpenLayers.Control.PanZoomBar(),
+				new OpenLayers.Control.Attribution()
+			  ]
+			};
+	
+			map = new OpenLayers.Map("basicMap", options);
+
+			var mapnik = new OpenLayers.Layer.OSM();
+			map.addLayer(mapnik);
+	
+			var zoom = initialZoom; 
+			latLonProjection = new OpenLayers.Projection("EPSG:4326");   // Transform from WGS 1984
+			var position = new OpenLayers.LonLat(initialLon, initialLat).transform(latLonProjection, map.getProjectionObject());
+			map.setCenter(position, zoom);
+
+			markers = new OpenLayers.Layer.Markers("Markers");
+			map.addLayer(markers);
+
+			// Get Coords
+			loadMarkers();
+		}
+	  
+		function loadMarkers() {
+			  $.getJSON(streamersFeedUrl,
+				function(data) {
+					markers.clearMarkers();
+					var existingMarkers = new Array();
+				
+					$.each(data, function(index, element) {
+						console.log(index + " " + element.uuid + " " + element.lat + " " + element.lon);
+					
+						var found = false;
+						for (var i = 0; i < existingMarkers.length && !found; i++) {
+							if (existingMarkers[i].uuid == element.uuid) {
+								found = true;						
+							}
+						}
+					
+						if (!found) {
+							console.log("Adding");
+						
+							var myMarker = new MyMarker(element.uuid, element.lat, element.lon);
+							existingMarkers.push(myMarker);	  				
+		
+							var lonLat = new OpenLayers.LonLat(element.lon, element.lat).transform(latLonProjection, map.getProjectionObject());    	
+
+							var feature = new OpenLayers.Feature(markers, lonLat);
+							feature.closeBox = true;
+							feature.popupClass = OpenLayers.Class(OpenLayers.Popup.AnchoredBubble, {minSize: new OpenLayers.Size(300, 180) } );
+							feature.data.popupContentHTML = "<a href=\"splayer.php?stream="+element.uuid+"\">Request Stream</a>";
+							feature.data.overflow = "hidden";
+
+							var marker = new OpenLayers.Marker(lonLat);
+							markers.addMarker(marker);
+						
+							marker.events.register("click", feature, function(evt) {
+							if (this.popup == null) {
+								this.popup = this.createPopup(this.closeBox);
+								map.addPopup(this.popup);
+								this.popup.show();
+							} else {
+								this.popup.toggle();
+							}
+							OpenLayers.Event.stop(evt);
+						});
+ 						
+	  				} else {
+	  					console.log("Already Exists");
+	  				}
+				});
+  			}
+		);
+      
+		setTimeout(loadMarkers, 10000);
+      }
+      
+    </script>
+  </head>
+  <body onload="init();">
+    <div id="basicMap"></div>
+  </body>
+</html>
